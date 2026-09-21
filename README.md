@@ -2,7 +2,20 @@
 
 Scroll-driven site where photographs extrude into a 3D space you can zoom into, plus a lab for testing image effects.
 
-## Run it
+## Online
+
+Live at **https://jssindelka.github.io/depth-plates/** (GitHub Pages, served from the `main` branch of `jssindelka/depth-plates`).
+
+| | |
+|---|---|
+| Site (dither) | https://jssindelka.github.io/depth-plates/ |
+| Site (clean) | https://jssindelka.github.io/depth-plates/clean.html |
+| Playground | https://jssindelka.github.io/depth-plates/lab/ |
+| Recipes | https://jssindelka.github.io/depth-plates/lab/recipes.html |
+
+To publish changes: `git add -A && git commit -m "what changed" && git push` — the live site updates about a minute later.
+
+## Run it locally
 
 Double-click **`start.command`**. It starts a local server and opens the site in your browser.
 (Or in a terminal: `cd ~/Desktop/depth-plates && python3 -m http.server 4173`.)
