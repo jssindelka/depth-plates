@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEPTH//LAB® — Playground</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230A0A0A'/><rect x='3' y='3' width='10' height='10' fill='%23E61919'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="index.html">DEPTH//LAB®</a>
+  <nav><a class="here" href="index.html">[ PLAYGROUND ]</a><a href="recipes.html">[ RECIPES ]</a><a class="hide-s" href="../index.html">[ SITE ]</a></nav>
+  <span class="fill"></span>
+  <span class="hide-s"><span class="dim">FPS</span><output id="ro-fps">00</output></span>
+  <span class="hide-s"><span class="dim">RES</span><output id="ro-res">0×0</output></span>
+  <span class="hide-s"><span class="dim">DEPTH</span><output id="ro-depth">—</output></span>
+  <span class="sys"><i></i> <output id="ro-on">0</output> FX LIVE</span>
+</div>
+
+<div class="work">
+  <div class="left">
+    <div class="stage" id="stage">
+      <canvas id="gl"></canvas>
+      <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+      <span class="tag t1" id="tag-name">[ LOADING ]</span>
+      <span class="tag t3">DRAG ORBIT · WHEEL ZOOM · SHIFT+DRAG PAN · DBL-CLICK RESET · DROP A FILE TO LOAD IT</span>
+      <span class="tag t2" id="tag-uv">U 0.000 V 0.000 D 0.00</span>
+    </div>
+    <div class="strip" id="images">
+      <span class="lbl">IMAGES&nbsp;<span class="red">A</span>&nbsp;=&nbsp;SHOWN&nbsp;/&nbsp;<span class="red">B</span>&nbsp;=&nbsp;MORPH TARGET</span>
+    </div>
+    <div class="strip">
+      <button id="b-img" class="hot">[ + IMAGE ]</button><button id="b-depth">[ + DEPTH MAP ]</button><button id="b-video">[ + VIDEO ]</button>
+      <button id="b-save">[ SAVE DEPTH ]</button><button id="b-off">[ ALL FX OFF ]</button><button id="b-reset">[ RESET ALL ]</button>
+      <input id="f-img" type="file" accept="image/*" hidden><input id="f-depth" type="file" accept="image/*" hidden><input id="f-video" type="file" accept="video/*" hidden>
+    </div>
+  </div>
+
+  <aside class="side" id="panel">
+    <h2 class="macro">EFFECTS</h2>
+    <p class="note">EACH MODULE EXPLAINS WHAT IT DOES AND WHERE IT IS USEFUL. SWITCH ONE ON, MOVE ITS SLIDERS, STACK SEVERAL. THE STATE BELOW RECORDS EVERY CHANGE SO A LOOK CAN BE REPRODUCED. <a class="red" href="recipes.html">&gt;&gt;&gt; RECOMMENDED COMBINATIONS</a></p>
+    <div id="mods"></div>
+    <p class="note">STATE (DIFFERENCE FROM DEFAULTS). PASTE THIS BACK TO CLAUDE TO TURN A LOOK INTO A RECIPE OR SHIP IT TO THE SITE.</p>
+    <textarea id="state" readonly spellcheck="false"></textarea>
+  </aside>
+</div>
+
+<script type="module">
+import {createLab,DEFAULTS,estimateDepth,lumaDepth} from './engine.js';
+import {FX,LIBRARY} from './fx.js';
+import {loadItem,fileToCanvas,fileToVideo,$,$$} from './shared.js';
+
+const lab=createLab($('#gl')),S=lab.S;
+window.lab=lab;                                            // console access: lab.S.fogOn=1
+let depthSrc='—',nameA='';
+
+/* ---------------------------------------------------------------- effect panel */
+const fmt=(v,p)=>p.step===1?String(Math.round(v)):Number(v).toFixed(2);
+$('#mods').innerHTML=FX.map(m=>`
+  <section class="mod ${m.on?'':'open on'}" data-id="${m.id}">
+    <header><b>${m.n}</b><h3>${m.name}</h3>${m.on?`<button class="tog" data-on="${m.on}">[ OFF ]</button>`:'<span></span>'}</header>
+    <div class="body">
+      <p class="what">${m.what}</p><p class="use">${m.use}</p>
+      ${m.params.map(p=>`<label class="row"><span>${p.label}</span>${
+        p.opts?`<select data-k="${p.k}" ${p.str?'data-str':''}>${p.opts.map((o,i)=>`<option value="${p.str?o:i}">${o}</option>`).join('')}</select>`:
+        p.text?`<input type="text" data-k="${p.k}" maxlength="24" spellcheck="false">`:
+        p.check?`<input type="checkbox" data-k="${p.k}"><output></output>`:
+        `<input type="range" data-k="${p.k}" min="${p.min}" max="${p.max}" step="${p.step||.01}"><output></output>`}</label>`).join('')}
+      ${m.id==='gyro'?'<label class="row"><span>SENSOR</span><button id="b-gyro" style="grid-column:2/4;border:1px solid var(--line);height:24px">[ REQUEST ACCESS ]</button></label>':''}
+      ${m.id==='video'?'<p class="warn" id="w-video">NO CLIP LOADED. USE [ + VIDEO ] UNDER THE STAGE.</p>':''}
+    </div>
+  </section>`).join('');
+const P=Object.fromEntries(FX.flatMap(m=>m.params.map(p=>[p.k,p])));
+
+function sync(){                                          // state -> controls
+  $$('[data-k]').forEach(el=>{const k=el.dataset.k,v=S[k];
+    if(el.type==='checkbox')el.checked=!!v;else if(document.activeElement!==el)el.value=v;
+    const o=el.nextElementSibling;if(o&&o.tagName==='OUTPUT')o.textContent=el.type==='checkbox'?(v?'ON':'OFF'):fmt(v,P[k])});
+  let on=0;$$('.mod').forEach(sec=>{const t=$('.tog',sec);if(!t)return;const v=!!S[t.dataset.on];on+=v;sec.classList.toggle('on',v);t.textContent=v?'[ ON ]':'[ OFF ]'});
+  $('#ro-on').textContent=String(on).padStart(2,'0');
+  const diff={};for(const k in DEFAULTS)if(S[k]!==DEFAULTS[k])diff[k]=typeof S[k]==='number'?+S[k].toFixed(3):S[k];
+  $('#state').value=JSON.stringify({image:nameA,...diff},null,1);
+  $('#w-video')?.classList.toggle('show',!!S.videoOn&&!lab.info().hasVideo);
+}
+$('#mods').addEventListener('input',e=>{const el=e.target,k=el.dataset.k;if(!k)return;
+  S[k]=el.type==='checkbox'?(el.checked?1:0):el.tagName==='SELECT'?(el.hasAttribute('data-str')?el.value:+el.value):el.type==='text'?el.value.toUpperCase():+el.value;sync()});
+$('#mods').addEventListener('click',e=>{
+  const t=e.target.closest('.tog');
+  if(t){const k=t.dataset.on;S[k]=S[k]?0:1;const sec=t.closest('.mod');if(S[k])sec.classList.add('open');
+    if(k==='dissolveOn'&&S[k]&&S.geometry!=='points')S.geometry='points';                  // dissolve reads best as points
+    sync();return}
+  const h=e.target.closest('.mod header');if(h)h.parentElement.classList.toggle('open');
+});
+$('#b-gyro')?.addEventListener('click',async e=>{e.target.textContent=(await lab.enableGyro().catch(()=>false))?'[ GRANTED ]':'[ DENIED / NO SENSOR ]'});
+lab.onInput=sync;
+
+/* ---------------------------------------------------------------- images */
+const strip=$('#images');
+function thumb(id,name,url){
+  const el=document.createElement('div');el.className='thumb';el.dataset.id=id;
+  el.innerHTML=`<img src="${url}" alt="${name}"><span class="nm">${id}</span><span class="ab"><button data-slot="A">A</button><button data-slot="B">B</button></span>`;strip.append(el);return el}
+const items=new Map();                                     // id -> {name, get():Promise<{color,depth,src,edge}>}
+LIBRARY.forEach(it=>{items.set(it.id,{name:it.name,get:()=>loadItem(it)});thumb(it.id,it.name,it.src)});
+async function use(id,slot){
+  const it=items.get(id),r=await it.get();lab.setImage(slot,r.color,r.depth,{edge:r.edge});
+  $$('.thumb').forEach(t=>t.classList.toggle(slot.toLowerCase(),t.dataset.id===id));
+  if(slot==='A'){nameA=it.name;depthSrc=r.src;$('#tag-name').textContent=`[ ${id} / ${it.name} ]`;$('#ro-depth').textContent=depthSrc}
+  sync();
+}
+strip.addEventListener('click',e=>{const t=e.target.closest('.thumb');if(!t)return;use(t.dataset.id,e.target.dataset.slot||'A')});
+
+let uploads=0;
+async function addImage(file){
+  const color=await fileToCanvas(file),id='U'+(++uploads),entry={color,depth:lumaDepth(color),src:'LUMINANCE',edge:1.4};
+  items.set(id,{name:file.name.toUpperCase().slice(0,28),get:async()=>entry});thumb(id,file.name,color.toDataURL('image/jpeg',.6));
+  await use(id,'A');$('#ro-depth').textContent='ESTIMATING…';
+  try{entry.depth=await estimateDepth(color);entry.src='AI';if($('.thumb.a')?.dataset.id===id){lab.setDepth('A',entry.depth,{edge:entry.edge});depthSrc='AI';$('#ro-depth').textContent='AI'}}
+  catch(err){console.warn(err);$('#ro-depth').textContent='LUMINANCE'}
+}
+async function addDepth(file){const id=$('.thumb.a')?.dataset.id;if(!id)return;const r=await items.get(id).get();r.depth=await fileToCanvas(file,1280);r.src='FILE';lab.setDepth('A',r.depth,{edge:r.edge});$('#ro-depth').textContent='FILE'}
+async function addVideo(file){lab.setVideo(await fileToVideo(file));S.videoOn=1;if(!S.videoMix)S.videoMix=1;$('[data-id=video]').classList.add('open');sync()}
+const route=f=>f.type.startsWith('video/')?addVideo(f):f.type.startsWith('image/')?addImage(f):null;
+for(const[b,f,fn]of[['#b-img','#f-img',addImage],['#b-depth','#f-depth',addDepth],['#b-video','#f-video',addVideo]]){
+  $(b).onclick=()=>$(f).click();$(f).onchange=e=>{const file=e.target.files[0];e.target.value='';if(file)fn(file)}}
+const stage=$('#stage');
+stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('over')});
+stage.addEventListener('dragleave',()=>stage.classList.remove('over'));
+stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('over');[...e.dataTransfer.files].forEach(route)});
+$('#b-save').onclick=async()=>{const id=$('.thumb.a')?.dataset.id;if(!id)return;const r=await items.get(id).get();
+  r.depth.toBlob(b=>{const l=document.createElement('a');l.href=URL.createObjectURL(b);l.download=`${id}-depth.png`;l.click();setTimeout(()=>URL.revokeObjectURL(l.href),1e3)})};
+$('#b-off').onclick=()=>{FX.forEach(m=>{if(m.on)S[m.on]=0});S.mono=0;S.scanlines=0;S.morph=0;sync()};
+$('#b-reset').onclick=()=>{lab.reset();sync()};
+
+/* ---------------------------------------------------------------- readouts */
+lab.onFrame=(()=>{let n=0;return()=>{if(++n%12)return;const i=lab.info();$('#ro-fps').textContent=String(i.fps).padStart(2,'0');$('#ro-res').textContent=`${i.w}×${i.h}`;
+  const m=lab.mouse;if(m.over){const[u,v]=lab.planeUV(m.x,m.y);$('#tag-uv').textContent=`U ${u.toFixed(3)} V ${v.toFixed(3)} D ${lab.depthAt(u,v).toFixed(2)}`}}})();
+
+/* ---------------------------------------------------------------- boot (a recipe can hand its state over via localStorage) */
+let first='04',second='02';
+if(location.hash==='#load'){try{const s=JSON.parse(localStorage.getItem('lab.handoff'));if(s){Object.assign(S,s.state);first=s.image||first;second=s.B||second;
+  FX.forEach(m=>{if(m.on&&S[m.on])$(`[data-id=${m.id}]`).classList.add('open')})}}catch{}history.replaceState(null,'',location.pathname)}
+await use(first,'A');await use(second,'B');sync();lab.start();
+</script>
+</body>
+</html>

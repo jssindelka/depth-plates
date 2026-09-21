@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEPTH//PLATES® — Clean Render</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230A0A0A'/><rect x='3' y='3' width='10' height='10' fill='%23E61919'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   DEPTH//PLATES — TACTICAL TELEMETRY SUBSTRATE (DARK ONLY)
+   ========================================================================== */
+:root{
+  --bg:#0A0A0A; --fg:#EAEAEA; --dim:#7C7C78; --line:#2B2B2B;
+  --red:#E61919; --green:#4AF626;
+  --bar:36px; --strip:34px;
+  --pad:clamp(16px,2.4vw,40px);
+  --macro:"Archivo Black","Inter","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html{background:var(--bg);color:var(--fg);scrollbar-width:none;scroll-behavior:smooth}
+html::-webkit-scrollbar{display:none}
+html.locked{overflow:hidden}
+body{font:500 11px/1.35 var(--mono);letter-spacing:.08em;text-transform:uppercase;-webkit-font-smoothing:antialiased;overflow-x:clip}
+a{color:inherit;text-decoration:none}
+button{font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:1px solid var(--red);outline-offset:-3px}
+::selection{background:var(--red);color:var(--bg)}
+
+/* GL surface sits behind the DOM; plate frames are transparent windows onto it */
+#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.top,main,.end{position:relative;z-index:1}
+
+/* analog degradation: scanlines + mechanical noise */
+body::before,body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:100;clip-path:var(--hole,none)}   /* --hole: image frames are excluded, see tick() */
+body::before{background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.22) 2px,rgba(0,0,0,.22) 4px)}
+body::after{opacity:.07;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+.macro{font-family:var(--macro);font-weight:400;text-transform:uppercase;letter-spacing:-.05em;line-height:.86}
+.dim{color:var(--dim)}
+.red{color:var(--red)}
+
+/* ---------- TOP BAR ---------- */
+.top{position:fixed;inset:0 0 auto 0;height:var(--bar);z-index:50;display:flex;background:var(--bg);border-bottom:1px solid var(--line)}
+.top>*{display:flex;align-items:center;gap:8px;padding:0 14px;border-right:1px solid var(--line);white-space:nowrap}
+.top .brand{font-weight:700}
+.top nav{gap:0;padding:0}
+.top nav a{display:flex;align-items:center;height:100%;padding:0 14px;border-right:1px solid var(--line)}
+.top nav a:last-child{border-right:0}
+.top nav a:hover{background:var(--fg);color:var(--bg)}
+.top .fill{flex:1}
+.top .sys i{width:7px;height:7px;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 1.6s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+
+/* ---------- HERO ---------- */
+.hero{min-height:100vh;min-height:100svh;padding-top:var(--bar);display:grid;grid-template-rows:auto 1fr auto;border-bottom:1px solid var(--line)}
+.cells{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.cells>*{background:var(--bg);padding:12px var(--pad);min-height:64px;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.cells dt{color:var(--dim)}
+.barcode{height:22px;width:100%;max-width:220px;background:repeating-linear-gradient(90deg,var(--fg) 0 2px,transparent 2px 3px,var(--fg) 3px 4px,transparent 4px 8px,var(--fg) 8px 11px,transparent 11px 13px)}
+.hero-type{position:relative;display:flex;align-items:center;padding:var(--pad)}
+.hero h1{font-size:clamp(4rem,15.2vw,19rem)}
+.hero h1 .red{position:relative}
+.hero h1 sup{font-size:.22em;letter-spacing:0;vertical-align:top;position:relative;top:.35em;color:var(--fg)}
+.xh{position:absolute;width:17px;height:17px;pointer-events:none}
+.xh::before,.xh::after{content:"";position:absolute;background:var(--fg)}
+.xh::before{left:8px;top:0;width:1px;height:17px}
+.xh::after{top:8px;left:0;height:1px;width:17px}
+.hero-foot{display:grid;grid-template-columns:5fr 4fr 3fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.hero-foot>*{background:var(--bg);padding:16px var(--pad)}
+.hero-foot p{color:var(--dim);padding-right:clamp(16px,6vw,96px)}
+.hero-foot p b{color:var(--fg);font-weight:500}
+.descend{display:flex;align-items:center;justify-content:space-between;color:var(--bg);background:var(--red)!important;font-weight:700}
+.descend span:last-child{animation:nudge 1s steps(3) infinite}
+@keyframes nudge{50%{transform:translateY(4px)}}
+
+/* ---------- GENERIC SECTION HEAD ---------- */
+.sec-head{display:grid;grid-template-columns:5fr 7fr;gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.sec-head>*{background:var(--bg);padding:var(--pad)}
+.sec-head h2{font-size:clamp(3rem,9vw,11rem)}
+.sec-head .note{display:flex;flex-direction:column;justify-content:space-between;gap:24px}
+.sec-head .note p{max-width:56ch;color:var(--dim)}
+
+/* ---------- MANIFEST ---------- */
+.manifest table{width:100%;border-collapse:collapse}
+.manifest th,.manifest td{text-align:left;padding:14px var(--pad);border-bottom:1px solid var(--line);font-weight:500;white-space:nowrap}
+.manifest th{color:var(--dim);font-weight:400}
+.manifest td.t{font-family:var(--macro);font-size:clamp(1.2rem,2.6vw,2.6rem);letter-spacing:-.04em;line-height:1;width:40%}
+.manifest tbody tr{cursor:pointer}
+.manifest tbody tr:hover{background:var(--fg);color:var(--bg)}
+.manifest tbody tr:hover .ok{color:var(--bg)}
+.manifest .ok{color:var(--red)}
+
+/* ---------- HAZARD INTERSTITIAL ---------- */
+.hazard{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.hazard .stripe{height:22px;background:repeating-linear-gradient(-45deg,var(--red) 0 14px,var(--bg) 14px 28px)}
+.hazard .txt{display:flex;justify-content:space-between;gap:16px;padding:10px var(--pad);border-top:1px solid var(--line);white-space:nowrap;overflow:hidden}
+
+/* ---------- PLATE (PINNED STAGE) ---------- */
+.plate{height:440vh;position:relative}
+.stage{position:sticky;top:0;height:100vh;height:100svh;padding-top:var(--bar);display:grid;grid-template-rows:var(--strip) minmax(0,1fr) var(--strip)}
+.strip{display:flex;background:var(--bg);border-bottom:1px solid var(--line);position:relative;z-index:3;min-width:0}
+.strip-bot{border-bottom:0;border-top:1px solid var(--line)}
+.strip .cell{display:flex;align-items:center;gap:8px;padding:0 14px;border-right:1px solid var(--line);white-space:nowrap}
+.strip .cell b{color:var(--red);font-weight:700}
+.strip .cell-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.strip .ro span{color:var(--dim)}
+.strip output{display:inline-block;min-width:6.5ch;font-variant-numeric:tabular-nums}
+.cell-phase output{min-width:20ch}
+
+.main{position:relative;display:grid;grid-template-columns:5fr 7fr;min-height:0}
+.info{position:relative;display:grid;grid-template-rows:auto auto 1fr;gap:clamp(10px,2vh,24px);padding:var(--pad);border-right:1px solid var(--line);overflow:hidden;min-height:0;will-change:clip-path}
+.info .num{font-size:min(15vw,30vh);line-height:.78;letter-spacing:-.07em;display:flex;align-items:flex-start;gap:.06em}
+.info .num small{font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--red);margin-top:.6em}
+.info h2{font-size:clamp(1.8rem,4.2vw,4.6rem)}
+.info .low{align-self:end;display:grid;gap:16px}
+.info p{max-width:46ch;color:var(--dim)}
+.info dl{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line)}
+.info dl div{background:var(--bg);padding:8px 10px;display:flex;justify-content:space-between;gap:8px}
+.info dt{color:var(--dim)}
+.dock{margin:var(--pad);min-height:0}
+
+.frame{position:absolute;left:0;top:0;border:1px solid var(--fg);overflow:hidden;cursor:zoom-in;z-index:2;user-select:none;-webkit-user-select:none}
+.frame canvas.fallback{width:100%;height:100%;object-fit:cover;display:block}
+.frame .br{position:absolute;width:18px;height:18px;border:2px solid var(--fg)}
+.frame .tl{left:10px;top:10px;border-right:0;border-bottom:0}
+.frame .tr{right:10px;top:10px;border-left:0;border-bottom:0}
+.frame .bl{left:10px;bottom:10px;border-right:0;border-top:0}
+.frame .brr{right:10px;bottom:10px;border-left:0;border-top:0}
+.frame .xh{left:50%;top:50%;margin:-8px 0 0 -8px}
+.frame .xh::before,.frame .xh::after{background:var(--red)}
+.frame .ruler{position:absolute;left:0;top:40px;bottom:40px;width:7px;background:repeating-linear-gradient(0deg,var(--fg) 0 1px,transparent 1px 10px)}
+.frame .tag{position:absolute;background:var(--bg);padding:3px 7px;white-space:nowrap;font-style:normal}
+.frame figcaption.tag{left:38px;top:10px}
+.frame samp.tag{right:38px;bottom:10px;font:inherit;font-variant-numeric:tabular-nums}
+.frame .hint{left:38px;bottom:10px;color:var(--dim)}
+.frame .hint .v{display:none}
+.frame.over{border-color:var(--red)}
+
+.phases{display:flex}
+.phases span{display:flex;align-items:center;padding:0 12px;border-right:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.phases span.on{background:var(--fg);color:var(--bg);font-weight:700}
+.ticks{flex:1;min-width:40px;position:relative;margin:11px 14px;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 6px)}
+.ticks i{position:absolute;inset:0 auto 0 0;width:0;background:repeating-linear-gradient(90deg,var(--fg) 0 1px,transparent 1px 6px);border-right:2px solid var(--red)}
+.ctl{display:flex}
+.ctl button{padding:0 14px;border-left:1px solid var(--line);white-space:nowrap;height:100%}
+.ctl button:hover{background:var(--fg);color:var(--bg)}
+.ctl .enter{background:var(--red);color:var(--bg);font-weight:700}
+.ctl-view{display:none}
+.ctl .save{display:none}
+.plate.has-depth .ctl .save{display:block}
+.plate.viewing .ctl-view{display:flex}
+.plate.viewing .ctl-scroll,.plate.viewing .phases{display:none}
+.plate.viewing .frame{cursor:grab;touch-action:none}
+.plate.viewing .frame.drag{cursor:grabbing}
+.plate.viewing .hint .v{display:inline}
+.plate.viewing .hint .s{display:none}
+
+/* ---------- SPEC ---------- */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.grid3>*{background:var(--bg);padding:var(--pad);display:grid;gap:18px;align-content:start;min-height:320px}
+.grid3 .n{font-size:clamp(3rem,7vw,7rem);color:var(--red)}
+.grid3 h3{font-family:var(--macro);font-weight:400;font-size:clamp(1.3rem,2.2vw,2.2rem);letter-spacing:-.04em;line-height:.95}
+.grid3 p{color:var(--dim);max-width:44ch}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.keys div{background:var(--bg);padding:14px var(--pad);display:flex;justify-content:space-between;align-items:center;gap:12px}
+kbd{font:inherit;border:1px solid var(--fg);padding:2px 7px;white-space:nowrap}
+pre.cfg{padding:var(--pad);font:inherit;text-transform:none;letter-spacing:.02em;color:var(--dim);border-bottom:1px solid var(--line);overflow-x:auto;line-height:1.6}
+pre.cfg b{color:var(--fg);font-weight:500}
+
+/* ---------- END ---------- */
+.end{padding-top:0}
+.end .big{padding:var(--pad);font-size:clamp(3.4rem,13vw,16rem)}
+.end .cells{border-top:1px solid var(--line);border-bottom:0}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:1100px){.strip .ro.x{display:none}}
+@media (max-width:820px){
+  .top .hide-s,.strip .ro,.cell-phase{display:none!important}
+  .cells{grid-template-columns:1fr 1fr}
+  .hero-foot,.sec-head,.grid3{grid-template-columns:1fr}
+  .keys{grid-template-columns:1fr 1fr}
+  .manifest .hide-s{display:none}
+  .main{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  .info{border-right:0;border-bottom:1px solid var(--line);grid-template-rows:auto auto;gap:8px}
+  .info .num{font-size:4.5rem}
+  .info .low{display:none}
+  .phases span:not(.on){display:none}
+  .plate.viewing .ticks{display:none}
+  .plate.has-depth .ctl .save{display:none}
+  .plate.viewing .ctl-view{flex:1}
+  .ctl-view button{flex:1;padding:0 4px}
+  .ctl-view button:first-child{border-left:0}
+  .frame .hint{display:none}
+  .grid3>*{min-height:0}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.top .sys i,.descend span:last-child{animation:none}}
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<div class="top">
+  <a class="brand" href="#top">DEPTH//PLATES®</a>
+  <nav class="hide-s"><a href="#index">[ INDEX ]</a><a href="#plates">[ PLATES ]</a><a href="#spec">[ SPEC ]</a><a href="index.html">[ DITHER RENDER ]</a><a href="lab/index.html">[ LAB ]</a></nav>
+  <span class="fill"></span>
+  <span class="hide-s"><span class="dim">SCROLL</span> <output id="ro-scroll">000.0%</output></span>
+  <span class="hide-s"><span class="dim">UTC</span> <output id="ro-utc">00:00:00</output></span>
+  <span class="sys"><i></i> SYS ONLINE</span>
+</div>
+
+<main id="top">
+
+  <!-- ======================= HERO ======================= -->
+  <header class="hero">
+    <dl class="cells">
+      <div><dt>UNIT</dt><dd>D-01 / SPATIAL ARCHIVE</dd></div>
+      <div><dt>REVISION</dt><dd>REV 2.6 — BUILD 0921</dd></div>
+      <div><dt>METHOD</dt><dd>PLATE &gt; DEPTH FIELD &gt; POINT VOLUME</dd></div>
+      <div><dt>SERIAL</dt><dd class="barcode" aria-hidden="true"></dd></div>
+    </dl>
+    <div class="hero-type">
+      <i class="xh" style="left:calc(var(--pad) - 8px);top:-9px"></i>
+      <i class="xh" style="right:calc(var(--pad) - 8px);bottom:-9px"></i>
+      <h1 class="macro">IMAGES<br>BECOME<br><span class="red">SPACE</span><sup>®</sup></h1>
+    </div>
+    <div class="hero-foot">
+      <p><b>EVERY PLATE IN THIS ARCHIVE IS A FLAT PHOTOGRAPH UNTIL YOU SCROLL.</b> THE FRAME OPENS, THE IMAGE SEPARATES ALONG ITS Z-AXIS INTO A NAVIGABLE POINT VOLUME, AND THE CAMERA MOVES IN. ENTER ANY PLATE TO ORBIT AND ZOOM FREELY.</p>
+      <p>/// 04 PLATES LOADED<br>/// DEPTH SOURCE: RANGE MAP OR LUMINANCE<br>/// RENDER: WEBGL2 DISPLACED MESH, UNPROCESSED IMAGE</p>
+      <a class="descend" href="#index"><span>&gt;&gt;&gt; SCROLL TO DESCEND</span><span>↓</span></a>
+    </div>
+  </header>
+
+  <!-- ======================= MANIFEST ======================= -->
+  <section class="manifest" id="index">
+    <div class="sec-head">
+      <h2 class="macro">INDEX</h2>
+      <div class="note">
+        <span>[ 01 — PLATE MANIFEST ]</span>
+        <p>SELECT A ROW TO JUMP TO A PLATE. EACH PLATE IS PINNED FOR FOUR VIEWPORT HEIGHTS WHILE IT TRANSITIONS THROUGH PHASES A / FLAT, B / EXTRUDE AND C / DOLLY.</p>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>DESIGNATION</th><th class="hide-s">SECTOR</th><th class="hide-s">DEPTH SRC</th><th class="hide-s">POINT GRID</th><th>STATUS</th></tr></thead>
+      <tbody id="manifest-rows"></tbody>
+    </table>
+  </section>
+
+  <!-- ======================= PLATES (generated from PLATES config) ======================= -->
+  <div id="plates"></div>
+
+  <!-- ======================= SPEC ======================= -->
+  <section id="spec">
+    <div class="sec-head">
+      <h2 class="macro">SPEC</h2>
+      <div class="note">
+        <span>[ 02 — OPERATING PROCEDURE ]</span>
+        <p>THE SAME THREE-PHASE SEQUENCE RUNS FOR EVERY PLATE. SCROLL DRIVES THE SEQUENCE; FREE INSPECTION HANDS THE CAMERA TO THE OPERATOR.</p>
+      </div>
+    </div>
+    <div class="grid3">
+      <article><span class="macro n">A</span><h3>FLAT PLATE</h3><p>THE IMAGE SITS DOCKED IN THE GRID, UNPROCESSED AND AT FULL RESOLUTION. AS SCROLL BEGINS THE FRAME WIPES ACROSS THE DATA COLUMN UNTIL IT FILLS THE STAGE.</p></article>
+      <article><span class="macro n">B</span><h3>DEPTH EXTRUSION</h3><p>THE IMAGE IS MAPPED ONTO A FINE MESH AND EVERY VERTEX IS DISPLACED ALONG Z BY ITS DEPTH VALUE. THE SURFACE TILTS; THE PICTURE ITSELF IS NOT ALTERED.</p></article>
+      <article><span class="macro n">C</span><h3>DOLLY / FREE ZOOM</h3><p>THE CAMERA TRAVELS INTO THE VOLUME TOWARD THE PLATE'S FOCUS COORDINATE. PRESS ENTER SPACE TO TAKE CONTROL: ORBIT, PAN AND ZOOM UP TO ×16.</p></article>
+    </div>
+    <div class="keys">
+      <div><span>ORBIT</span><kbd>DRAG</kbd></div>
+      <div><span>ZOOM</span><kbd>WHEEL / PINCH</kbd></div>
+      <div><span>PAN</span><kbd>SHIFT + DRAG</kbd></div>
+      <div><span>RESET</span><kbd>DBL-CLICK / 0</kbd></div>
+      <div><span>ZOOM STEP</span><kbd>+ / −</kbd></div>
+      <div><span>NUDGE</span><kbd>ARROWS</kbd></div>
+      <div><span>EXIT</span><kbd>ESC</kbd></div>
+      <div><span>REPLACE PLATE</span><kbd>DROP IMAGE FILE</kbd></div>
+    </div>
+<pre class="cfg">// LOADING YOUR OWN IMAGES — edit the PLATES array at the bottom of this file:
+//   { id:'01', title:'MY PLATE', <b>src:'images/01.jpg'</b>, <b>depth:'images/01-depth.png'</b>, focus:[0.5,0.5], ... }
+// depth is optional (white = near). Without it, depth is derived from image luminance.
+// Serve over http (e.g. python3 -m http.server) — browsers block WebGL textures from file://.
+// Or just drag an image file onto any plate frame to test it instantly.</pre>
+  </section>
+</main>
+
+<footer class="end">
+  <div class="hazard"><div class="stripe"></div></div>
+  <div class="macro big">END OF<br>TRANS<span class="red">/</span>MISSION</div>
+  <dl class="cells">
+    <div><dt>©</dt><dd>2026 DEPTH//PLATES®</dd></div>
+    <div><dt>UNIT</dt><dd>D-01 / REV 2.6</dd></div>
+    <div><dt>CHANNEL</dt><dd>&lt; ARCHIVE-OPEN &gt;</dd></div>
+    <div><dt>RETURN</dt><dd><a href="#top">&gt;&gt;&gt; TOP OF DOCUMENT</a></dd></div>
+  </dl>
+</footer>
+
+<script>
+/* ==========================================================================
+   CONFIG — one entry per plate.
+   src/depth: image URLs (depth optional, white = near). If src is null or
+   fails to load, the procedural generator named in `gen` is used instead.
+   focus: [u,v] the scroll-driven dolly flies toward (0..1, origin top-left).
+   Optional per plate: zoom (end of the scroll dolly, default 4.2), relief (depth strength, default 1),
+   swing (how far the scripted camera yaws/pitches, default 1), edge (how far near shapes are grown in the
+   depth map, default 1; raise it for subjects with many thin gaps such as torn leaves or hair).
+   ========================================================================== */
+const PLATES = [
+  { id:'01', title:'COLD BREW', src:'images/01.jpg', depth:'images/01-depth.png', gen:'monolith', focus:[0.37,0.44],
+    body:'CAMPAIGN FRAME, HIGH ANGLE. SUBJECT AND CAN IN HARD DAYLIGHT AGAINST GLASS AND PAVING. DEPTH DERIVED FROM LUMINANCE UNTIL A RANGE MAP IS SUPPLIED.',
+    meta:{SECTOR:'CMP-01',CAPTURE:'21.09 / 12:40',RANGE:'0.4 M — 9 M','DEPTH SRC':'LUMINANCE'} },
+  { id:'02', title:'CLOUD FOREST', src:'images/02.webp', depth:'images/02-depth.png', gen:'ridges', focus:[0.40,0.46],
+    body:'WET-SEASON UNDERSTOREY. MOSS-COVERED BOULDERS IN THE NEAR FIELD, BROADLEAF AND FERN CANOPY FRAMING A FOG-FILLED CLEARING. THE CAMERA TRAVELS UP THE STREAM BED INTO THE MIST.',
+    meta:{SECTOR:'TRP-07',CAPTURE:'03.05 / 07:55',RANGE:'0.6 M — 40 M','DEPTH SRC':'AI RANGE MAP'} },
+  { id:'03', title:'CLOUD PEAK', src:'images/03.webp', depth:'images/03-depth.png', gen:'ridges', focus:[0.68,0.42],
+    body:'VOLCANIC RIDGELINE UNDER A COLLAPSING CLOUD BANK. DARK TREELINE IN THE NEAR FIELD, FORESTED SPURS IN THE MID FIELD, SUMMIT DISSOLVING INTO CLOUD AT RANGE. THE CAMERA CLIMBS TOWARD THE LIT SHOULDER OF THE PEAK.',
+    meta:{SECTOR:'TRP-09',CAPTURE:'03.05 / 17:20',RANGE:'8 M — 6 KM','DEPTH SRC':'AI RANGE MAP'} },
+  { id:'04', title:'FIELD OPERATOR', src:'images/04.jpg', depth:'images/04-depth.png', gen:'orbital', focus:[0.45,0.47], zoom:2.3, relief:.72, swing:-.7, edge:2.6,
+    body:'OPERATOR WITH A RANGEFINDER CAMERA INSIDE A BANANA STAND, SHOT ON FILM FROM BELOW. A TORN LEAF CROSSES THE NEAR FIELD IN FRONT OF THE SUBJECT; CANOPY AND OVERCAST SKY CLOSE THE FRAME BEHIND. THE CAMERA PUSHES THROUGH THE LEAVES AND HOLDS ON OPERATOR AND INSTRUMENT.',
+    meta:{SECTOR:'TRP-11',CAPTURE:'04.05 / 18:05',RANGE:'0.5 M — 12 M','DEPTH SRC':'AI RANGE MAP'} },
+];
+
+/* ========================================================================== UTIL */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)), lerp=(a,b,t)=>a+(b-a)*t;
+const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+const pad=(n,w,d)=>{const s=Math.abs(n).toFixed(d);return s.padStart(w,'0')};
+const sgn=n=>(n<0?'−':'+');
+const root=document.documentElement;
+const narrow=matchMedia('(max-width:820px)');
+const calm=matchMedia('(prefers-reduced-motion:reduce)');
+
+/* ========================================================================== PROCEDURAL PLATES */
+function mk(w,h){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;return{canvas,ctx:canvas.getContext('2d')}}
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hash2(x,y,s){let h=Math.imul(x,374761393)+Math.imul(y,668265263)+Math.imul(s,1442695041);h^=h>>>13;h=Math.imul(h,1274126177);return((h^h>>>16)>>>0)/4294967296}
+function vnoise(x,y,s){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+  return lerp(lerp(hash2(xi,yi,s),hash2(xi+1,yi,s),u),lerp(hash2(xi,yi+1,s),hash2(xi+1,yi+1,s),u),v)}
+function fbm(x,y,s,o=4){let a=.5,f=1,t=0,n=0;for(let i=0;i<o;i++){t+=a*vnoise(x*f,y*f,s+i);n+=a;a*=.5;f*=2}return t/n}
+const gray=v=>{const c=Math.round(clamp(v,0,1)*255);return`rgb(${c},${c},${c})`};
+
+const GEN={
+  monolith(W,H){
+    const C=mk(W,H),D=mk(W,H),g=C.ctx,z=D.ctx,R=rng(7),hz=H*.58;
+    let gr=g.createLinearGradient(0,0,0,hz);gr.addColorStop(0,'#161616');gr.addColorStop(1,'#a3a29d');g.fillStyle=gr;g.fillRect(0,0,W,hz);
+    z.fillStyle='#000';z.fillRect(0,0,W,H);
+    g.fillStyle='#E61919';g.beginPath();g.arc(W*.72,hz*.6,H*.095,0,7);g.fill();
+    z.fillStyle=gray(.04);z.beginPath();z.arc(W*.72,hz*.6,H*.095,0,7);z.fill();
+    gr=g.createLinearGradient(0,hz,0,H);gr.addColorStop(0,'#77766f');gr.addColorStop(1,'#0c0c0c');g.fillStyle=gr;g.fillRect(0,hz,W,H-hz);
+    gr=z.createLinearGradient(0,hz,0,H);gr.addColorStop(0,gray(.12));gr.addColorStop(1,gray(1));z.fillStyle=gr;z.fillRect(0,hz,W,H-hz);
+    const L=6;
+    for(let i=0;i<L;i++){
+      const t=i/(L-1),n=Math.round(lerp(15,3,t)),yb=hz+(H-hz)*Math.pow(t,1.5)*.9+2,d=.12+.88*(yb-hz)/(H-hz);
+      for(let k=0;k<n;k++){
+        const w=W*lerp(.022,.12,t)*(.7+R()*.6),h=H*lerp(.1,.66,t)*(.45+R()*.75);
+        let x=R();if(t>.7)x=x<.5?x*.5:.5+x*.5+.0;x=x*W*1.1-W*.05;if(t>.7&&x>W*.28&&x<W*.72)continue;
+        const s=lerp(.58,.07,Math.pow(t,.7)),wl=w*.62;
+        g.fillStyle=gray(s);g.fillRect(x,yb-h,wl,h);
+        g.fillStyle=gray(s*.5);g.fillRect(x+wl,yb-h,w-wl,h);
+        g.fillStyle=gray(s*.62);
+        const step=Math.max(4,Math.round(lerp(5,22,t)));
+        for(let y=yb-h+step;y<yb-2;y+=step)g.fillRect(x+wl*.12,y,wl*.76,Math.max(1,step*.22));
+        z.fillStyle=gray(d);z.fillRect(x,yb-h,wl,h);
+        const zg=z.createLinearGradient(x+wl,0,x+w,0);zg.addColorStop(0,gray(d));zg.addColorStop(1,gray(d-.06));z.fillStyle=zg;z.fillRect(x+wl,yb-h,w-wl,h);
+      }
+    }
+    return{C:C.canvas,D:D.canvas};
+  },
+  ridges(W,H){
+    const C=mk(W,H),D=mk(W,H),g=C.ctx,z=D.ctx;
+    let gr=g.createLinearGradient(0,0,0,H*.7);gr.addColorStop(0,'#d9d7d0');gr.addColorStop(1,'#8e8c86');g.fillStyle=gr;g.fillRect(0,0,W,H);
+    z.fillStyle='#000';z.fillRect(0,0,W,H);
+    g.fillStyle='#E61919';g.beginPath();g.arc(W*.32,H*.36,H*.17,0,7);g.fill();
+    z.fillStyle=gray(.03);z.beginPath();z.arc(W*.32,H*.36,H*.17,0,7);z.fill();
+    const L=8;
+    for(let i=0;i<L;i++){
+      const t=i/(L-1),base=lerp(.46,.95,t)*H,amp=lerp(.07,.24,t)*H,fq=lerp(5.5,1.5,t),d=lerp(.1,.88,t);
+      const path=c=>{c.beginPath();c.moveTo(0,H);for(let x=0;x<=W;x+=2){const n=fbm(x/W*fq+i*9.13,i*3.31,11,5),r=1-Math.abs(2*n-1);c.lineTo(x,base-amp*(r-.45)*1.7)}c.lineTo(W,H);c.closePath()};
+      path(g);g.fillStyle=gray(lerp(.62,.03,Math.pow(t,.8)));g.fill();
+      path(z);const zg=z.createLinearGradient(0,base-amp,0,H);zg.addColorStop(0,gray(d));zg.addColorStop(1,gray(d+.12));z.fillStyle=zg;z.fill();
+    }
+    return{C:C.canvas,D:D.canvas};
+  },
+  orbital(W,H){
+    const C=mk(W,H),D=mk(W,H),ci=C.ctx.createImageData(W,H),di=D.ctx.createImageData(W,H),c=ci.data,d=di.data;
+    const cx=W*.5,cy=H*.5,Rr=H*.33,ll=Math.hypot(.55,.45,.7),Lx=-.55/ll,Ly=-.45/ll,Lz=.7/ll;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const dx=(x-cx)/Rr,dy=(y-cy)/Rr,r2=dx*dx+dy*dy,o=(y*W+x)*4;let l,dep;
+      if(r2<1){const nz=Math.sqrt(1-r2),lam=Math.max(0,dx*Lx+dy*Ly+nz*Lz),lon=Math.atan2(dx,nz),lat=Math.asin(dy),
+          n=fbm(lon*2.2+5,lat*2.2+3,23,5),band=.5+.5*Math.sin(lat*15+n*7);
+        l=(.3+.7*(n*.55+band*.45))*(.03+lam*1.1);dep=.3+.6*nz}
+      else{l=hash2(x,y,5)>.9984?.55+hash2(y,x,9)*.45:.03;dep=l>.5?.06:0}
+      const v=clamp(l,0,1)*255;c[o]=c[o+1]=c[o+2]=v;c[o+3]=255;d[o]=d[o+1]=d[o+2]=dep*255;d[o+3]=255;
+    }
+    C.ctx.putImageData(ci,0,0);D.ctx.putImageData(di,0,0);
+    const g=C.ctx,z=D.ctx,tilt=-.3,ct=Math.cos(tilt),st=Math.sin(tilt);
+    [[1.75,'#E61919'],[1.93,'#9a9a96'],[2.02,'#E61919'],[2.2,'#5c5c5a']].forEach(([m,col],ri)=>{
+      const a=Rr*m,b=Rr*m*.2,N=2600;
+      for(let k=0;k<N;k++){const th=k/N*Math.PI*2,s=Math.sin(th),ex=Math.cos(th)*a,ey=s*b,x=cx+ex*ct-ey*st,y=cy+ex*st+ey*ct;
+        if(s<0&&Math.hypot(x-cx,y-cy)<Rr)continue;if(hash2(k,ri,3)<.18)continue;
+        g.fillStyle=col;g.fillRect(x,y,3,2);z.fillStyle=gray(.6+.38*s*(m/2.2));z.fillRect(x,y,3,2)}
+    });
+    return{C:C.canvas,D:D.canvas};
+  }
+};
+
+/* image loading */
+const loadImg=src=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error('load failed: '+src));i.src=src});
+function fit(img,max){const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),m=mk(Math.round(img.naturalWidth*s),Math.round(img.naturalHeight*s));m.ctx.drawImage(img,0,0,m.canvas.width,m.canvas.height);return m.canvas}
+function lumaDepth(src){const m=mk(Math.round(src.width/2),Math.round(src.height/2));m.ctx.filter='grayscale(1) blur(3px)';m.ctx.drawImage(src,0,0,m.canvas.width,m.canvas.height);return m.canvas}
+async function source(cfg){
+  if(cfg.src){try{const C=fit(await loadImg(cfg.src),2048);const D=cfg.depth?fit(await loadImg(cfg.depth),1280):lumaDepth(C);return{C,D,auto:!cfg.depth}}
+    catch(e){console.warn('[DEPTH//PLATES] '+e.message+' — using procedural plate')}}
+  return GEN[cfg.gen||'monolith'](1024,640);
+}
+
+/* AI depth: Depth Anything V2 (small) via transformers.js, runs locally in the browser.
+   Loaded lazily, only for plates that have an image but no depth map. */
+const AUTO_DEPTH=true;
+const DEFAULT_MONO=0;          // 0 = original colour, 1 = monochrome phosphor (per plate: mono:1 in PLATES)
+let depthPipe,depthQueue=Promise.resolve();
+async function estimateDepth(canvas){
+  const T=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  depthPipe??=(async()=>{
+    const id='onnx-community/depth-anything-v2-small';
+    if(navigator.gpu){try{return await T.pipeline('depth-estimation',id,{device:'webgpu',dtype:'fp16'})}catch(e){console.warn('[DEPTH//PLATES] webgpu unavailable, using wasm',e)}}
+    return T.pipeline('depth-estimation',id,{device:'wasm',dtype:'q8'});
+  })();
+  const pipe=await depthPipe,run=depthQueue.then(()=>pipe(T.RawImage.fromCanvas(canvas)));depthQueue=run.catch(()=>{});   // one inference at a time
+  const {depth}=await run;
+  return depth.toCanvas();                         // white = near
+}
+async function autoDepth(pl,C){
+  if(!AUTO_DEPTH||!gl)return;
+  const tag=$('figcaption',pl.frame),token=pl.token=Symbol();
+  tag.textContent='[ ESTIMATING DEPTH / LOADING MODEL ]';
+  try{let D=await estimateDepth(C);if(pl.token!==token)return;
+    if(!(D instanceof HTMLCanvasElement)){const m=mk(D.width,D.height);m.ctx.drawImage(D,0,0);D=m.canvas}
+    const t=tex(soften(D,pl.cfg.edge));gl.deleteTexture(pl.texD);pl.texD=t;pl.depthCanvas=D;
+    tag.textContent='[ DEPTH RECONSTRUCTION / AI RANGE MAP ]';pl.el.classList.add('has-depth')}
+  catch(e){console.warn('[DEPTH//PLATES] depth estimation failed — luminance depth in use',e);tag.textContent='[ DEPTH RECONSTRUCTION / LUMINANCE ]'}
+}
+
+/* ========================================================================== DOM BUILD */
+const total=String(PLATES.length).padStart(2,'0');
+$('#manifest-rows').innerHTML=PLATES.map(p=>`
+  <tr data-go="plate-${p.id}"><td>${p.id}</td><td class="t">${p.title}</td><td class="hide-s">${p.meta.SECTOR||'—'}</td>
+  <td class="hide-s">${p.depth||!p.src?'RANGE MAP':'LUMINANCE'}</td><td class="hide-s"><output data-grid="${p.id}">— × —</output></td><td class="ok">[ READY ]</td></tr>`).join('');
+$('#plates').innerHTML=PLATES.map((p,i)=>`
+  <section class="plate" id="plate-${p.id}" aria-label="Plate ${p.id}: ${p.title}">
+    <div class="stage">
+      <header class="strip">
+        <span class="cell">PLATE <b>${p.id}</b>/ ${total}</span>
+        <span class="cell cell-title">${p.title}</span>
+        <span class="cell cell-phase"><output data-k="phase">[ A / FLAT ]</output></span>
+        <span class="cell ro"><span>ZOOM</span><output data-k="zoom">×01.00</output></span>
+        <span class="cell ro"><span>CAM-Z</span><output data-k="camz">0.000</output></span>
+        <span class="cell ro x"><span>YAW</span><output data-k="yaw">+00.0°</output></span>
+        <span class="cell ro x"><span>PITCH</span><output data-k="pitch">+00.0°</output></span>
+      </header>
+      <div class="main">
+        <article class="info">
+          <div class="macro num">${p.id}<small>/// UNIT D-01</small></div>
+          <h2 class="macro">${p.title.replace(' ','<br>')}</h2>
+          <div class="low">
+            <p>${p.body}</p>
+            <dl>${Object.entries(p.meta).map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+          </div>
+        </article>
+        <div class="dock"></div>
+        <figure class="frame" tabindex="0" role="button" aria-label="Enter 3D space for plate ${p.id}">
+          <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+          <figcaption class="tag">[ DEPTH RECONSTRUCTION / LIVE ]</figcaption>
+          <span class="tag hint"><span class="s">CLICK TO ENTER SPACE · DROP IMAGE TO REPLACE</span><span class="v">DRAG ORBIT · WHEEL ZOOM · SHIFT+DRAG PAN · DBL-CLICK RESET</span></span>
+          <samp class="tag" data-k="uv">U 0.000 V 0.000</samp>
+        </figure>
+      </div>
+      <footer class="strip strip-bot">
+        <div class="phases"><span>A / FLAT</span><span>B / EXTRUDE</span><span>C / DOLLY</span></div>
+        <div class="ticks"><i></i></div>
+        <div class="ctl ctl-scroll"><button class="enter" data-act="enter">[ ENTER SPACE ]</button></div>
+        <div class="ctl ctl-view">
+          <button data-act="out" aria-label="Zoom out">[ − ]</button><button data-act="in" aria-label="Zoom in">[ + ]</button>
+          <button data-act="reset">[ RESET ]</button><button data-act="save" class="save">[ SAVE DEPTH ]</button><button data-act="mono">[ MONO ]</button><button data-act="exit">[ EXIT · ESC ]</button>
+        </div>
+      </footer>
+    </div>
+  </section>
+  ${i<PLATES.length-1?`<div class="hazard"><div class="stripe"></div><div class="txt"><span>/// END PLATE ${p.id}</span><span class="dim">VOLUME RELEASED — FRAME RETURNING TO DOCK</span><span>NEXT: ${PLATES[i+1].title} &gt;&gt;&gt;</span></div></div>`:''}
+`).join('');
+$$('[data-go]').forEach(r=>r.addEventListener('click',()=>$('#'+r.dataset.go).scrollIntoView()));
+
+/* ========================================================================== GL ENGINE */
+const FOV=40*Math.PI/180,TAN=Math.tan(FOV/2),P11=1/TAN,DS=.6,ZMIN=.55,ZMAX=16;
+const canvas=$('#gl');
+const gl=canvas.getContext('webgl2',{antialias:false,alpha:true,premultipliedAlpha:true});
+let dpr=1,prog,U={};
+
+const VS=`#version 300 es
+layout(location=0) in vec2 aUV;
+uniform sampler2D uDepthTex;uniform mat4 uMVP;uniform float uAspect,uDepthAmt,uDS;
+out vec2 vUV;
+void main(){
+  float d=dot(textureLod(uDepthTex,aUV,0.).rgb,vec3(.299,.587,.114));
+  vUV=aUV;
+  gl_Position=uMVP*vec4((aUV.x-.5)*uAspect,.5-aUV.y,(d-.5)*uDS*uDepthAmt,1.);
+}`;
+const FS=`#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uColor;uniform float uMono;
+out vec4 o;
+void main(){
+  vec3 c=texture(uColor,vUV).rgb;                                   // the photograph, untouched
+  o=vec4(mix(c,vec3(dot(c,vec3(.299,.587,.114))),uMono),1.);
+}`;
+
+function initGL(){
+  const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x};
+  prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  ['uColor','uDepthTex','uMVP','uAspect','uDepthAmt','uDS','uMono'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+  gl.uniform1i(U.uColor,0);gl.uniform1i(U.uDepthTex,1);gl.uniform1f(U.uDS,DS);
+  gl.enable(gl.DEPTH_TEST);
+}
+function tex(src,mip){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);if(mip)gl.generateMipmap(gl.TEXTURE_2D);
+  for(const[k,v]of[[gl.TEXTURE_MIN_FILTER,mip?gl.LINEAR_MIPMAP_LINEAR:gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);return t}
+
+/* mat4, column-major */
+const I=()=>{const o=new Float32Array(16);o[0]=o[5]=o[10]=o[15]=1;return o};
+function mul(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k];o[c*4+r]=s}return o}
+function persp(asp,n,f){const o=new Float32Array(16);o[0]=P11/asp;o[5]=P11;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=2*f*n/(n-f);return o}
+function trans(x,y,z){const o=I();o[12]=x;o[13]=y;o[14]=z;return o}
+function rotX(a){const o=I(),c=Math.cos(a),s=Math.sin(a);o[5]=c;o[6]=s;o[9]=-s;o[10]=c;return o}
+function rotY(a){const o=I(),c=Math.cos(a),s=Math.sin(a);o[0]=c;o[2]=-s;o[8]=s;o[10]=c;return o}
+const fitDist=(A,Af)=>Math.min(1,A/Af)/(2*TAN);   // distance at which the flat plate exactly covers the frame
+
+/* ========================================================================== PLATES */
+const plates=PLATES.map(cfg=>{
+  const el=$('#plate-'+cfg.id),o={};$$('[data-k]',el).forEach(n=>o[n.dataset.k]=n);
+  return{cfg,el,stage:$('.stage',el),main:$('.main',el),info:$('.info',el),dock:$('.dock',el),frame:$('.frame',el),
+    phases:$$('.phases span',el),tick:$('.ticks i',el),title:$('.cell-title',el),monoBtn:$('[data-act=mono]',el),o,
+    A:1.6,count:0,vao:null,texC:null,texD:null,ready:false,p:0,view:null,mono:cfg.mono??DEFAULT_MONO,monoCur:cfg.mono??DEFAULT_MONO,
+    cur:{e:0,depth:0,yaw:0,pitch:0,zoom:1,cx:0,cy:0,fill:1.25}};
+});
+let viewer=null,mx=.5,my=.5;
+plates.forEach(pl=>pl.monoBtn.textContent=pl.mono?'[ RGB ]':'[ MONO ]');
+
+/* Depth edges: grow near-field shapes outward by a few pixels (lighten-composited offsets = dilation), then blur slightly.
+   The unavoidable mesh stretch at a depth edge then falls on background pixels just outside the subject, not on the subject's own outline. */
+function soften(D,k=1){
+  const m=mk(D.width,D.height),c=m.ctx,r=Math.max(1.5,D.width/380)*k;
+  c.drawImage(D,0,0);c.globalCompositeOperation='lighten';
+  for(const f of[1,.66,.33])for(let a=0;a<12;a++)c.drawImage(D,Math.cos(a*Math.PI/6)*r*f,Math.sin(a*Math.PI/6)*r*f);
+  const o=mk(D.width,D.height);o.ctx.filter='blur('+Math.min(3,r*.4).toFixed(1)+'px)';o.ctx.drawImage(m.canvas,0,0);return o.canvas;
+}
+function setSource(pl,C,D){
+  pl.A=C.width/C.height;
+  const rows=narrow.matches?180:360,cols=Math.round(rows*pl.A),uv=new Float32Array((rows+1)*(cols+1)*2),idx=new Uint32Array(rows*cols*6);
+  for(let y=0,i=0;y<=rows;y++)for(let x=0;x<=cols;x++){uv[i++]=x/cols;uv[i++]=y/rows}
+  for(let y=0,i=0;y<rows;y++)for(let x=0;x<cols;x++){const a=y*(cols+1)+x,b=a+1,c=a+cols+1,d=c+1;idx[i++]=a;idx[i++]=c;idx[i++]=b;idx[i++]=b;idx[i++]=c;idx[i++]=d}
+  if(gl){
+    const tc=tex(C,true),td=tex(soften(D,pl.cfg.edge));                       // throws SecurityError on tainted sources
+    [pl.texC,pl.texD].forEach(t=>t&&gl.deleteTexture(t));pl.texC=tc;pl.texD=td;
+    pl.vao=gl.createVertexArray();gl.bindVertexArray(pl.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ARRAY_BUFFER,uv,gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idx,gl.STATIC_DRAW);
+  }else{$$('canvas.fallback',pl.frame).forEach(c=>c.remove());C.className='fallback';pl.frame.prepend(C)}
+  pl.rows=rows;pl.count=idx.length;pl.ready=true;
+  const g=$(`[data-grid="${pl.cfg.id}"]`);if(g)g.textContent=`${cols} × ${rows} MESH / ${(pl.count/3000).toFixed(0)}K TRIS`;
+}
+async function boot(pl){
+  let s=await source(pl.cfg);
+  try{setSource(pl,s.C,s.D);if(s.auto)autoDepth(pl,s.C)}catch(e){console.warn('[DEPTH//PLATES] texture blocked ('+e.name+') — serve over http. Using procedural plate.');s=GEN[pl.cfg.gen||'monolith'](1024,640);setSource(pl,s.C,s.D)}
+}
+
+/* scroll-driven camera script */
+function scripted(pl){
+  const p=pl.p,e=ss(0,.22,p),dep=ss(.2,.55,p),zt=ss(.55,.95,p),f=pl.cfg.focus||[.5,.5];
+  const sw=pl.cfg.swing??1;
+  return{e,depth:dep,yaw:(-.38*dep+.56*zt)*sw,pitch:(.12*dep-.07*zt)*sw,zoom:Math.pow(pl.cfg.zoom??4.2,zt),
+    cx:(f[0]-.5)*pl.A*zt,cy:(.5-f[1])*zt,fill:lerp(1.25,.88,dep)};
+}
+const VIEW0=()=>({yaw:-.3,pitch:.1,zoom:1,cx:0,cy:0});
+function clampPan(pl,v){const k=Math.max(0,1-1/v.zoom);v.cx=clamp(v.cx,-pl.A/2*k,pl.A/2*k);v.cy=clamp(v.cy,-.5*k,.5*k)}
+function zoomAt(pl,factor,x,y){
+  const v=pl.view;if(!v)return;const r=pl.frame.getBoundingClientRect(),Af=r.width/r.height,d0=fitDist(pl.A,Af);
+  const nx=x==null?0:((x-r.left)/r.width)*2-1,ny=y==null?0:-(((y-r.top)/r.height)*2-1);
+  const z1=clamp(v.zoom*factor,ZMIN,ZMAX),c0=d0/v.zoom,c1=d0/z1;
+  const wx=v.cx+nx*TAN*Af*c0,wy=v.cy+ny*TAN*c0;
+  v.zoom=z1;v.cx=wx-nx*TAN*Af*c1;v.cy=wy-ny*TAN*c1;clampPan(pl,v);
+}
+
+/* viewer mode: lock scroll, hand the camera to the operator */
+function enter(pl){
+  if(viewer||!pl.ready)return;
+  const top=pl.el.getBoundingClientRect().top+scrollY,span=pl.el.offsetHeight-innerHeight;
+  root.style.scrollBehavior='auto';scrollTo(0,top+span*.56);
+  root.classList.add('locked');pl.el.classList.add('viewing');pl.view=VIEW0();viewer=pl;
+  pl.frame.setAttribute('aria-label','3D space active. Drag to orbit, wheel to zoom, escape to exit.');
+}
+function exit(){
+  if(!viewer)return;const pl=viewer;pl.view=null;viewer=null;
+  pl.el.classList.remove('viewing');root.classList.remove('locked');root.style.scrollBehavior='';
+  pl.frame.setAttribute('aria-label','Enter 3D space for plate '+pl.cfg.id);
+}
+
+/* ========================================================================== INPUT */
+plates.forEach(pl=>{
+  const f=pl.frame,ptrs=new Map();let pinch=0;
+  f.addEventListener('click',()=>{if(!pl.view)enter(pl)});
+  f.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!pl.view){e.preventDefault();enter(pl)}});
+  f.addEventListener('dblclick',()=>{if(pl.view)pl.view=VIEW0()});
+  f.addEventListener('wheel',e=>{if(!pl.view)return;e.preventDefault();zoomAt(pl,Math.exp(-e.deltaY*(e.ctrlKey?.012:.0016)),e.clientX,e.clientY)},{passive:false});
+  f.addEventListener('pointerdown',e=>{if(!pl.view)return;f.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});f.classList.add('drag');pinch=0});
+  f.addEventListener('pointermove',e=>{
+    const r=f.getBoundingClientRect(),Af=r.width/r.height,c=pl.cur,cz=fitDist(pl.A,Af)/c.zoom;
+    const u=(c.cx+(((e.clientX-r.left)/r.width)*2-1)*TAN*Af*cz)/pl.A+.5,v=.5-(c.cy-(((e.clientY-r.top)/r.height)*2-1)*TAN*cz);
+    pl.o.uv.textContent=`U ${clamp(u,0,1).toFixed(3)} V ${clamp(v,0,1).toFixed(3)}`;
+    const pt=ptrs.get(e.pointerId);if(!pl.view||!pt)return;
+    const dx=e.clientX-pt.x,dy=e.clientY-pt.y;pt.x=e.clientX;pt.y=e.clientY;
+    if(ptrs.size===2){const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch)zoomAt(pl,d/pinch,(a.x+b.x)/2,(a.y+b.y)/2);pinch=d}
+    else if(e.shiftKey){const w=2*TAN*cz/r.height;pl.view.cx-=dx*w;pl.view.cy+=dy*w;clampPan(pl,pl.view)}
+    else{pl.view.yaw=clamp(pl.view.yaw+dx*.004,-.75,.75);pl.view.pitch=clamp(pl.view.pitch+dy*.004,-.5,.5)}
+  });
+  const up=e=>{ptrs.delete(e.pointerId);pinch=0;if(!ptrs.size)f.classList.remove('drag')};
+  f.addEventListener('pointerup',up);f.addEventListener('pointercancel',up);
+  /* drop an image file to replace the plate */
+  f.addEventListener('dragover',e=>{e.preventDefault();f.classList.add('over')});
+  f.addEventListener('dragleave',()=>f.classList.remove('over'));
+  f.addEventListener('drop',async e=>{e.preventDefault();f.classList.remove('over');
+    const file=[...e.dataTransfer.files].find(x=>x.type.startsWith('image/'));if(!file)return;
+    const url=URL.createObjectURL(file);try{const C=fit(await loadImg(url),2048);pl.el.classList.remove('has-depth');pl.depthCanvas=null;setSource(pl,C,lumaDepth(C));pl.title.textContent='USER PLATE / '+file.name;autoDepth(pl,C)}finally{URL.revokeObjectURL(url)}});
+  pl.el.addEventListener('click',e=>{const a=e.target.closest('[data-act]')?.dataset.act;if(!a)return;
+    if(a==='enter')enter(pl);else if(a==='exit')exit();else if(a==='in')zoomAt(pl,1.5);else if(a==='out')zoomAt(pl,1/1.5);
+    else if(a==='reset')pl.view=VIEW0();
+    else if(a==='save'&&pl.depthCanvas)pl.depthCanvas.toBlob(b=>{const l=document.createElement('a');l.href=URL.createObjectURL(b);l.download=`${pl.cfg.id}-depth.png`;l.click();setTimeout(()=>URL.revokeObjectURL(l.href),1e3)});else if(a==='mono'){pl.mono=pl.mono?0:1;pl.monoBtn.textContent=pl.mono?'[ RGB ]':'[ MONO ]'}});
+});
+addEventListener('keydown',e=>{
+  if(!viewer)return;const v=viewer.view,s=.06/v.zoom;
+  const k={Escape:()=>exit(),'+':()=>zoomAt(viewer,1.4),'=':()=>zoomAt(viewer,1.4),'-':()=>zoomAt(viewer,1/1.4),'0':()=>viewer.view=VIEW0(),
+    ArrowLeft:()=>v.cx-=s,ArrowRight:()=>v.cx+=s,ArrowUp:()=>v.cy+=s,ArrowDown:()=>v.cy-=s}[e.key];
+  if(k){e.preventDefault();k();if(viewer)clampPan(viewer,viewer.view)}
+});
+addEventListener('pointermove',e=>{mx=e.clientX/innerWidth;my=e.clientY/innerHeight},{passive:true});
+
+/* ========================================================================== FRAME LOOP */
+function resize(){dpr=Math.min(devicePixelRatio||1,2);const w=Math.round(innerWidth*dpr),h=Math.round(innerHeight*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}}
+const roScroll=$('#ro-scroll'),roUtc=$('#ro-utc');
+let last=performance.now();
+
+function tick(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;const k=1-Math.exp(-dt*9),vh=innerHeight;
+  resize();
+  roScroll.textContent=pad(scrollY/Math.max(1,root.scrollHeight-vh)*100,5,1)+'%';
+  if(gl){gl.disable(gl.SCISSOR_TEST);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT)}
+  let hole='';
+
+  for(const pl of plates){
+    const sr=pl.el.getBoundingClientRect();
+    if(sr.bottom<-50||sr.top>vh+50)continue;
+    pl.p=clamp(-sr.top/(sr.height-vh),0,1);
+
+    /* targets: operator (viewer) or scroll script */
+    const t=pl.view?{e:1,depth:1,fill:.88,...pl.view}:scripted(pl),c=pl.cur;
+    for(const key in c)c[key]=lerp(c[key],t[key],k);
+    pl.monoCur=lerp(pl.monoCur,pl.mono,k);
+
+    /* frame geometry: dock rect -> full stage */
+    const d=pl.dock,m=pl.main,L=lerp(d.offsetLeft,0,c.e),T=lerp(d.offsetTop,0,c.e),W=lerp(d.offsetWidth,m.clientWidth,c.e),H=lerp(d.offsetHeight,m.clientHeight,c.e);
+    const fs=pl.frame.style;fs.left=L+'px';fs.top=T+'px';fs.width=W+'px';fs.height=H+'px';
+    pl.info.style.clipPath=narrow.matches?`inset(0 0 ${Math.max(0,pl.info.offsetTop+pl.info.offsetHeight-T)}px 0)`:`inset(0 ${Math.max(0,pl.info.offsetLeft+pl.info.offsetWidth-L)}px 0 0)`;
+
+    /* telemetry */
+    const Af=W/H,d0=fitDist(pl.A,Af),camZ=d0/c.zoom,ph=pl.view?3:pl.p<.22?0:pl.p<.55?1:2;
+    pl.o.phase.textContent=['[ A / FLAT ]','[ B / EXTRUDE ]','[ C / DOLLY ]','[ FREE INSPECTION ]'][ph];
+    pl.phases.forEach((s,i)=>s.classList.toggle('on',i===ph));
+    pl.tick.style.width=(pl.p*100).toFixed(2)+'%';
+    pl.o.zoom.textContent='×'+pad(c.zoom,5,2);pl.o.camz.textContent=camZ.toFixed(3);
+    pl.o.yaw.textContent=sgn(c.yaw)+pad(c.yaw*57.2958,4,1)+'°';pl.o.pitch.textContent=sgn(c.pitch)+pad(c.pitch*57.2958,4,1)+'°';
+
+    /* draw into the frame's rect */
+    const fr=pl.frame.getBoundingClientRect();
+    {const l=fr.left.toFixed(1),t=fr.top.toFixed(1),r=fr.right.toFixed(1),b=fr.bottom.toFixed(1);hole+=`,${l}px ${t}px,${r}px ${t}px,${r}px ${b}px,${l}px ${b}px,${l}px ${t}px,0 0`}
+    if(!gl||!pl.ready)continue;
+    const vx=Math.round(fr.left*dpr),vy=Math.round((vh-fr.bottom)*dpr),vw=Math.round(fr.width*dpr),vhp=Math.round(fr.height*dpr);
+    const sx=Math.max(0,vx),sy=Math.max(0,vy),sw=Math.min(canvas.width,vx+vw)-sx,shh=Math.min(canvas.height,vy+vhp)-sy;
+    if(sw<=0||shh<=0)continue;
+    gl.enable(gl.SCISSOR_TEST);gl.viewport(vx,vy,vw,vhp);gl.scissor(sx,sy,sw,shh);
+    gl.clearColor(.039,.039,.039,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    const par=pl.view||calm.matches?0:c.depth,yaw=c.yaw+(mx-.5)*.14*par,pitch=c.pitch+(my-.5)*.09*par;
+    const mvp=mul(persp(Af,.02,10),mul(trans(-c.cx,-c.cy,-camZ),mul(rotX(pitch),rotY(yaw))));
+    gl.uniformMatrix4fv(U.uMVP,false,mvp);
+    gl.uniform1f(U.uDS,DS*(pl.cfg.relief??1));gl.uniform1f(U.uAspect,pl.A);gl.uniform1f(U.uDepthAmt,c.depth);gl.uniform1f(U.uMono,pl.monoCur);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pl.texC);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,pl.texD);
+    gl.bindVertexArray(pl.vao);gl.drawElements(gl.TRIANGLES,pl.count,gl.UNSIGNED_INT,0);
+  }
+  root.style.setProperty('--hole',hole?`polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0${hole})`:'none');
+  requestAnimationFrame(tick);
+}
+
+/* ========================================================================== BOOT */
+setInterval(()=>roUtc.textContent=new Date().toISOString().slice(11,19),1000);
+try{if(gl)initGL()}catch(e){console.error(e)}
+if(!gl)console.warn('[DEPTH//PLATES] WebGL2 unavailable — plates shown flat.');
+Promise.all(plates.map(boot)).then(()=>requestAnimationFrame(tick));
+</script>
+</body>
+</html>

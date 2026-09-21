@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEPTH//LAB® — Recipes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230A0A0A'/><rect x='3' y='3' width='10' height='10' fill='%23E61919'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="index.html">DEPTH//LAB®</a>
+  <nav><a href="index.html">[ PLAYGROUND ]</a><a class="here" href="recipes.html">[ RECIPES ]</a><a class="hide-s" href="../index.html">[ SITE ]</a></nav>
+  <span class="fill"></span>
+  <span class="hide-s"><span class="dim">RECIPE</span><output id="ro-rcp">R01</output></span>
+  <span class="hide-s"><span class="dim">SCROLL</span><output id="ro-t">000%</output></span>
+  <span class="hide-s"><span class="dim">FPS</span><output id="ro-fps">00</output></span>
+  <span class="sys"><i></i> LIVE</span>
+</div>
+
+<div class="work flip">
+  <aside class="side">
+    <h2 class="macro">RECIPES</h2>
+    <p class="note">RECOMMENDED COMBINATIONS. EACH ONE IS A SHORT DIRECTED SEQUENCE: THE SCRUBBER UNDER THE STAGE STANDS IN FOR SCROLL PROGRESS THROUGH A SECTION. OPEN ANY MOMENT IN THE PLAYGROUND TO TAKE IT APART.</p>
+    <div id="list"></div>
+    <p class="note"><span class="red">NOT IN THIS LAB / 13 GAUSSIAN SPLATS.</span> TRUE WALK-AROUND 3D CANNOT BE MADE FROM ONE PHOTOGRAPH. IT NEEDS 30-100 FRAMES OR A SLOW VIDEO ORBIT OF THE SAME SCENE, CAPTURED AT THE SHOOT. IF A FUTURE SHOOT INCLUDES THAT, IT CAN BE ADDED AS ITS OWN VIEWER.</p>
+  </aside>
+
+  <div class="left" style="grid-template-rows:minmax(0,1fr) auto auto auto">
+    <div class="stage" id="stage">
+      <canvas id="gl"></canvas>
+      <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+      <span class="tag t1" id="tag-name">[ LOADING ]</span>
+      <span class="tag t3">MOVE THE CURSOR OVER THE STAGE: LIGHT, LENS AND FOCUS RESPOND WHERE A RECIPE USES THEM</span>
+      <span class="tag t2" id="tag-fx"></span>
+    </div>
+    <div class="scrub">
+      <button id="b-play">[ PAUSE ]</button>
+      <label style="padding:0 14px;gap:12px"><span class="dim">SCROLL PROGRESS</span><input id="t" type="range" min="0" max="1" step=".001" value="0" style="flex:1"></label>
+      <button id="b-video">[ + VIDEO ]</button>
+      <button class="go" id="b-open">[ OPEN THIS MOMENT IN PLAYGROUND ]</button>
+      <input id="f-video" type="file" accept="video/*" hidden>
+    </div>
+    <div class="strip" id="images"><span class="lbl">TRY THE RECIPE ON</span></div>
+    <div class="detail">
+      <div><h2 class="macro" id="d-name">—</h2><p id="d-why"></p><p class="warn" id="d-warn">THIS RECIPE ENDS IN A VIDEO HANDOFF. LOAD A CLIP WITH [ + VIDEO ] TO SEE THE FINAL THIRD.</p></div>
+      <dl><div><dt>EFFECTS</dt><dd id="d-fx" class="chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></dd></div><div><dt>WHERE TO USE</dt><dd id="d-where"></dd></div><div><dt>DEFAULT IMAGE</dt><dd id="d-img"></dd></div></dl>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {createLab} from './engine.js';
+import {RECIPES,LIBRARY} from './fx.js';
+import {loadItem,fileToVideo,$,$$} from './shared.js';
+
+const lab=createLab($('#gl'),{camera:false}),S=lab.S;
+window.lab=lab;                                            // console access: lab.S.fogOn=1
+let rcp=RECIPES[0],t=0,playing=true,imgA='';
+
+$('#list').innerHTML=RECIPES.map(r=>`<button class="rcp" data-id="${r.id}"><b>${r.n}</b><div><h3>${r.name}</h3><div class="chips">${r.fx.map(f=>`<span class="chip">${f}</span>`).join('')}<span class="chip">${r.where}</span></div></div></button>`).join('');
+const strip=$('#images');
+LIBRARY.forEach(it=>{const el=document.createElement('div');el.className='thumb';el.dataset.id=it.id;el.innerHTML=`<img src="${it.src}" alt="${it.name}"><span class="nm">${it.id}</span>`;strip.append(el)});
+const item=id=>LIBRARY.find(i=>i.id===id);
+
+async function setA(id){const it=item(id),r=await loadItem(it);lab.setImage('A',r.color,r.depth,{edge:r.edge});imgA=id;
+  $$('.thumb').forEach(x=>x.classList.toggle('a',x.dataset.id===id));$('#tag-name').textContent=`[ ${rcp.n} / ${rcp.name} / ON ${it.name} ]`}
+async function setB(id){const it=item(id),r=await loadItem(it);lab.setImage('B',r.color,r.depth,{edge:r.edge})}
+async function select(id){
+  rcp=RECIPES.find(r=>r.id===id);t=0;
+  $$('.rcp').forEach(b=>b.classList.toggle('sel',b.dataset.id===id));
+  $('#ro-rcp').textContent=rcp.n;$('#d-name').textContent=rcp.name;$('#d-why').textContent=rcp.why;$('#d-where').textContent=rcp.where;
+  $('#d-fx').innerHTML=rcp.fx.map(f=>`<span class="chip">${f}</span>`).join('');$('#d-img').textContent=`${rcp.image} / ${item(rcp.image).name}${rcp.B?`  >  ${rcp.B} / ${item(rcp.B).name}`:''}`;
+  $('#tag-fx').textContent=rcp.fx.join(' + ');
+  await setA(rcp.image);await setB(rcp.B||rcp.image);warn();
+}
+const warn=()=>$('#d-warn').classList.toggle('show',!!rcp.needsVideo&&!lab.info().hasVideo);
+
+$('#list').addEventListener('click',e=>{const b=e.target.closest('.rcp');if(b)select(b.dataset.id)});
+strip.addEventListener('click',e=>{const x=e.target.closest('.thumb');if(x)setA(x.dataset.id)});
+$('#t').addEventListener('input',e=>{t=+e.target.value;playing=false;$('#b-play').textContent='[ PLAY ]'});
+$('#b-play').onclick=()=>{playing=!playing;$('#b-play').textContent=playing?'[ PAUSE ]':'[ PLAY ]'};
+$('#b-video').onclick=()=>$('#f-video').click();
+$('#f-video').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f){lab.setVideo(await fileToVideo(f));warn()}};
+$('#b-open').onclick=()=>{const st={...rcp.at(t)};if(st.lightOn)st.lightFollow=1;if(st.lensOn)st.lensFollow=1;
+  localStorage.setItem('lab.handoff',JSON.stringify({state:st,image:imgA,B:rcp.B||imgA}));location.href='index.html#load'};
+
+/* the recipe drives the whole state every frame; the cursor takes over light / lens / focus when it is on the stage */
+const LOOP=11;let hold=0;
+lab.onFrame=(now,dt)=>{
+  if(playing){if(t>=1){hold+=dt;if(hold>1.6){t=0;hold=0}}else t=Math.min(1,t+dt/LOOP);$('#t').value=t}
+  const st=rcp.at(t);if(lab.mouse.over){if(st.lightOn)st.lightFollow=1;if(st.lensOn)st.lensFollow=1;if(st.focusOn&&rcp.id!=='directed'&&rcp.id!=='living')st.focusFollow=1}
+  Object.assign(S,st);
+  $('#ro-t').textContent=String(Math.round(t*100)).padStart(3,'0')+'%';$('#ro-fps').textContent=String(lab.info().fps).padStart(2,'0');
+};
+
+await select(location.hash.slice(1)&&RECIPES.some(r=>r.id===location.hash.slice(1))?location.hash.slice(1):RECIPES[0].id);
+lab.start();
+</script>
+</body>
+</html>
